@@ -1,0 +1,129 @@
+/*
+#####################################################
+#                                                   #
+# Schlumpf.css                                      #
+#                                                   #
+#####################################################
+
+*/
+
+#Schlumpf {
+    font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+    border-collapse: collapse;
+    width: 100%;
+}
+#Schlumpf div {
+    margin: auto;
+    width: 50%;
+	text-align: center;
+    border: 3px solid green;
+    padding: 10px;
+}
+#footer {
+    padding-top: 12px;
+    padding-bottom: 12px;
+    text-align: center;
+    background-color: black;
+    color: white;
+	font-style: italic;
+    font-weight: bold;
+}
+#tablehead {
+    margin: auto;
+    width: 50%;
+	text-align: center;
+//    border: 3px solid green;
+//    padding: 10px;
+}
+#Schlumpf table {
+    margin: auto;
+//    width: auto;
+    padding: 10px;
+} 
+#Schlumpf td, #Schlumpf th {
+    border: 1px solid #ddd;
+    padding: 8px;
+}
+
+#Schlumpf tr:nth-child(even){background-color: #f2f2f2;}
+
+#Schlumpf tr:hover {background-color: #ddd;}
+
+#Schlumpf th {
+    padding-top: 12px;
+    padding-bottom: 12px;
+    text-align: left;
+    background-color: #4CAF50;
+    color: white;
+}
+
+/*###################################################
+#                                                   #
+# horizontal menu navigation                        #
+#                                                   #
+###################################################*/
+#content a, .menu a:link, .menu a:active, .menu a:visited 
+{
+text-decoration: none;
+}
+#content a:hover 
+{
+background-color: black;
+color: white;
+}
+
+.nav 
+{
+align: center;
+margin: 10px 10px;
+padding-top: 8px;
+padding-bottom: 10px;
+padding-left: 8px;
+background: none;
+}
+
+.nav li 
+{
+list-style-type: none;
+display: inline;
+padding: 10px 30px;
+background-color: #e67e22;
+margin-left: -11px;
+font-size: 120%;
+}
+
+.nav li:first-child
+{
+margin-left: 0;
+border-top-left-radius: 10px !important;
+border-bottom-left-radius: 10px !important;
+}
+
+.nav li:last-child
+{
+margin-right: 0px;
+border-top-right-radius: 10px !important;
+border-bottom-right-radius: 10px !important;
+}
+
+.nav a, .menu a:link, .menu a:active, .menu a:visited 
+{
+text-decoration: none;
+color: white;
+border-bottom: 0;
+padding: 10px 10px;
+}
+
+.nav a:hover 
+{
+text-decoration: none;
+background: #9b59b6;
+padding: 10px 10px;
+}
+
+ul.nav li a.current 
+{
+text-decoration: none;
+background: #e74c3c;
+padding: 10px 10px;
+}

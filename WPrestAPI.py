@@ -18,6 +18,9 @@ import json
 import random
 import time
 
+from markdown import markdown
+from renderers import Mkd_html
+
 REQUEST = {}
         
 #####################################################
@@ -29,8 +32,8 @@ REQUEST = {}
 class Dispatcher:
         
     wpURL = 'http://localhost/REST-API' # change this to suit your environment
-    wpUSER = 'user'     # your WordPress credentials you type at /wp-admin
-    wpPWD = 'password'  # ditto
+    wpUSER = 'bruno'     # your WordPress credentials you type at /wp-admin
+    wpPWD = 'gonzo625'  # ditto
     
     #####################################################
     #                                                   #
@@ -45,39 +48,30 @@ class Dispatcher:
         #db = DBmanager('mysql', path) 
 
         html = self.DoHeaderMenus()
-        
-        #html += f"<h3>method-{method}</h3>"
-        #for k, v in REQUEST.items():
-        #    html += f"{k}= {v[0]}<br />" 
-        
+                
         if method == 'GET':
-            #print ('method GET')
             if 'menu' in REQUEST:
                 if REQUEST['menu'][0] == 'blog':
-                    with open("readme.html", 'r') as myfile:
-                        html += myfile.read()
-                        
-                elif REQUEST['menu'][0] == 'play':
-                    html += self.processPlay() # show
+                    with open("README.md", 'r') as myfile:
+                         html += markdown(myfile.read(), Mkd_html())
 
                 elif REQUEST['menu'][0] == 'requests':
                     html += db.Reset()
-                    html += self.doRequests(db) # listing
+                    html += self.doRequests(db) 
+                    html += db.Display(f"select * from press_release_tb", False)
 
-                elif REQUEST['menu'][0] == 'request':
-                    html += self.processRequest(REQUEST['id'][0]) # show
+                #elif REQUEST['menu'][0] == 'request':
+                #    html += self.processRequest(REQUEST['id'][0]) # show
 
-                elif REQUEST['menu'][0] == 'delprel':
-                    html += self.deletePressRelease(REQUEST['id'][0]) # delete
+                #elif REQUEST['menu'][0] == 'delprel':
+                #    html += self.deletePressRelease(REQUEST['id'][0]) # delete
 
-                elif REQUEST['menu'][0] == 'modprel':
-                    html += self.modifyPressRelease(REQUEST['id'][0]) # modify
+                #elif REQUEST['menu'][0] == 'modprel':
+                #    html += self.modifyPressRelease(REQUEST['id'][0]) # modify
 
                 elif REQUEST['menu'][0] == 'insprel':
-                    html += self.insertPressRelease() # insert
-
-                elif REQUEST['menu'][0] == 'PR':
-                    html += db.Display('select * from press_release_tb order by id desc')
+                    db.Synchronize (self.insertPressRelease())
+                    html += db.Display(f"select * from press_release_tb", False)
 
             elif 'order' in REQUEST:
                 if 'dir' in REQUEST:
@@ -92,18 +86,17 @@ class Dispatcher:
                 html += db.Display(f"select * from {REQUEST['table'][0]}")
 
         elif method == 'POST':
-            #print ('method POST')
             if REQUEST['button'][0] == 'SAVE' :
-                html += self.modifyPressRelease(REQUEST['rowid'][0]) # modify
+                html += self.modifyPressRelease(REQUEST['wpid'][0]) # modify
             elif REQUEST['button'][0] == 'DELETE':
-                html += self.deletePressRelease(REQUEST['rowid'][0]) # delete
-            elif REQUEST['button'][0] == 'NEW':
-                html += self.insertPressRelease() # insert
+                html += self.deletePressRelease(REQUEST['wpid'][0]) # delete
                 
-            html += db.PostTable()
+            myid = db.PostTable()
+            if REQUEST['button'][0] == 'NEW':
+                db.Synchronize (self.insertPressRelease(), myid)
+            html += db.Display(f"select * from press_release_tb order by id desc", False)
 
         else:
-            #html += db.Populate()
             html += db.Display('select * from press_release_tb order by id desc')
             
         db.Close()
@@ -123,6 +116,7 @@ class Dispatcher:
         REQUEST.pop('menu', None)        
         REQUEST.pop('id', None)        
         REQUEST['table'] = ('press_release_tb', '')
+        REQUEST['wpid'] = (pressrel['id'], '')
         REQUEST['date'] = (pressrel['date'], '')
         REQUEST['slug'] = (pressrel['slug'], '')
         REQUEST['title'] = (pressrel['title']['rendered'], '')
@@ -140,8 +134,6 @@ class Dispatcher:
             REQUEST['button'] = ('SYNC', '')
             REQUEST['rowid'] = (pressrel['id'], 0)
        
-        print ('SyncLocalPressRelease')
-        pprint (REQUEST)
         return db.PostTable()
  
     #####################################################
@@ -151,11 +143,10 @@ class Dispatcher:
     #####################################################
 
     def doRequests (self, db):    
-        r = requests.get(self.wpURL + '/wp-json/wp/v2/press_releases/')        
-        r.encoding = 'utf-8'
+        r = requests.get(self.wpURL + '/wp-json/wp/v2/press_releases/?per_page=100')     
         content = r.json()
-        pprint (content)
         retval = ''
+        i = 0
         for pressrel in content:
             retval += '<hr>'
             for field, value in pressrel.items():
@@ -169,44 +160,15 @@ class Dispatcher:
                             retval += f"id= {value} <a href=\"{self.action}?menu=request&id={value}\">{pressrel['slug']}</a> "
                             retval += f" <a href=\"{self.action}?menu=delprel&id={value}\">DELETE</a> "
                             retval += f" <a href=\"{self.action}?menu=modprel&id={value}\">MODIFY</a> "
-            retval += self.SyncLocalPressRelease (db, pressrel)
+            retval += str(self.SyncLocalPressRelease (db, pressrel))
+            i = i + 1
             
         retval +=  f"<hr> <a href=\"{self.action}?menu=insprel\">INSERT</a> <br />"   
         retval += time.strftime('%Y-%m-%dT%H:%M:%S')
         
-        return retval # json.dumps (r.text)
+        retval = "<div id=\"tablehead\"><h2>"+ str(i) +" press releases loaded</h2></div>\n"
+        return retval 
 
-    #####################################################
-    #                                                   #
-    # doRequests                                        #
-    #                                                   #
-    #####################################################
-
-    def doRequests (self, db):    
-        r = requests.get(self.wpURL + '/wp-json/wp/v2/press_releases/')
-        content = r.json()
-        pprint (content)
-        retval = ''
-        for pressrel in content:
-            retval += '<hr>'
-            for field, value in pressrel.items():
-                if field in ['title', 'date', 'id', 'author', 'status']:
-                    if type (value) is dict:
-                        retval += f"{field}= {value['rendered']} " 
-                    else:
-                        if field != 'id':
-                            retval += f"{field}= {value} " 
-                        else:
-                            retval += f"id= {value} <a href=\"{self.action}?menu=request&id={value}\">{pressrel['slug']}</a> "
-                            retval += f" <a href=\"{self.action}?menu=delprel&id={value}\">DELETE</a> "
-                            retval += f" <a href=\"{self.action}?menu=modprel&id={value}\">MODIFY</a> "
-            retval += self.SyncLocalPressRelease (db, pressrel)
-            
-        retval +=  f"<hr> <a href=\"{self.action}?menu=insprel\">INSERT</a> <br />"   
-        retval += time.strftime('%Y-%m-%dT%H:%M:%S')
-        
-        return retval # json.dumps (r.text)
-       
     #####################################################
     #                                                   #
     # processPlay                                       #
@@ -249,7 +211,7 @@ class Dispatcher:
 
     def processRequest (self, id):    
         r = requests.get(f"{self.wpURL}/wp-json/wp/v2/press_releases/{id}")
-        print ('status_code='+str(r.status_code))
+        print ('status_code='+str(r.status_code)+ ' id '+str(id))
         content = r.json()
         pprint (content)
         retval = ''
@@ -264,6 +226,7 @@ class Dispatcher:
                 else:
                     retval += f"{field}= {value}<br />" 
         
+        json.dumps (r.text)
         return retval # json.dumps (r.text)
 
     #####################################################
@@ -331,20 +294,13 @@ class Dispatcher:
         'link': REQUEST['link'][0]}}
         r = requests.post(f"{self.wpURL}/wp-json/wp/v2/press_releases/", json=payload, auth=(self.wpUSER, self.wpPWD))
 
-        print ('status_code='+str(r.status_code))
         content = r.json()
-        pprint (content)
-        retval = ''
+        retval = 0
         for field, value in content.items():
-            if not field in ['_links', 'categories', 'tags']:
-                retval += f"{field}= {value}<br />" 
             if field == 'id':
-                REQUEST['id'] = (value, 0)
-                REQUEST['button'][0] = 'SYNC'  
-                print ('insertPressRelease() storing ID')
-                pprint (REQUEST)
-                
-        return r.text
+                retval = value
+                                
+        return retval
 
     #####################################################
     #                                                   #
@@ -359,7 +315,7 @@ class Dispatcher:
 <head>
 <title>{myTitle}</title>
 <link rel="stylesheet" type="text/css" href="/Schlumpf.css" />
-
+<meta charset="UTF-8">
 </head>
 <body>
 
@@ -367,10 +323,8 @@ class Dispatcher:
 
 <center><ul class="nav">
 <li> <a href="{self.action}">Home</a></li>
-<!-- <li> <a href="{self.action}?menu=blog">readme</a></li> -->
+<li> <a href="{self.action}?menu=blog">readme</a></li>
 <li> <a href="{self.action}?menu=requests">Load from WP</a></li>
-<li> <a href="{self.action}?menu=play">Read REST API</a></li>
-<li> <a href="{self.action}?menu=PR">Press Releases</a></li>
 </ul></center>
         '''
         return retval
@@ -397,15 +351,20 @@ class Dispatcher:
 
 class DBmanager:
             
-    def __init__(self, engine, action,):
+    def __init__(self, engine, action):
         global REQUEST
         self.dsn = engine
         self.action = action
         self.db_name = 'db_name'
         if self.dsn == 'sqlite':
-            #import sqlite3
-            self.cnx = sqlite3.connect('Schlumpf.db')
-            print ("connecting to sqlite")
+            
+            if os.path.isfile('Schlumpf.db') == False:
+                self.cnx = sqlite3.connect('Schlumpf.db')
+                self.Populate()
+                print ("building sqlite schema")
+            else:            
+                self.cnx = sqlite3.connect('Schlumpf.db')
+                print ("connecting to sqlite")
         else:
             self.cnx = mysql.connector.connect(host='localhost',
                                      user='DB_USER',
@@ -442,19 +401,42 @@ class DBmanager:
 
     #####################################################
     #                                                   #
+    # Synchronize                                       #
+    #                                                   #
+    #####################################################
+
+    def Synchronize(self, wpid, myid):
+        cursor = self.cnx.cursor()
+         
+        sql = f'update press_release_tb set wpid = {wpid} where id = {myid}'
+
+        if self.dsn == 'sqlite':
+            try:
+                cursor.execute (sql)
+            except sqlite3.Error as e:
+                print (f'An error occurred: {e.args[0]}')
+        else:
+            try:
+                cursor.execute (sql)
+            except mysql.connector.Error as err:
+                print ("Failed creating database: {}".format(err))
+
+        cursor.close()
+        
+    #####################################################
+    #                                                   #
     # Populate                                          #
     #                                                   #
     #####################################################
 
     def Populate(self):
         html = ''
-        if os.path.isfile('Schlumpf.db') == True and self.dsn == 'sqlite':
-            print ("database already exists")
             
         strings = [
         'drop table if exists press_release_tb',
         "create table if not exists press_release_tb ("\
         "id integer primary key AUTO_INCREMENT,"\
+        "wpid integer,"\
         "date text NOT NULL,"\
         "slug text NULL,"\
         "title text NOT NULL,"\
@@ -499,7 +481,7 @@ class DBmanager:
     
     #####################################################
     #                                                   #
-    # RowExists                                           #
+    # RowExists                                         #
     #                                                   #
     #####################################################
 
@@ -518,13 +500,14 @@ class DBmanager:
     #                                                   #
     #####################################################
 
-    def Display(self, sql):
+    def Display(self, sql, title=True):
         global REQUEST
         html = ''#sql+'<br />'
         matches = re.search(r'from\s+(\S+)', sql)
         view = matches.group(1)
         table = re.sub(r'_view', "", matches.group(1)) #preg_replace ("/_view/i", "", $view);
-        html += "<div id=\"tablehead\"><h2>"+re.sub(r'_tb$', '', table)+"</h2></div>\n"
+        if title:
+            html += "<div id=\"tablehead\"><h2>"+re.sub(r'_tb$', '', table)+"</h2></div>\n"
         html += f'<a href="{self.action}?table={table}&row=-1">new item</a>'
         html += '<table id="Schlumpf">'
         colTypes = self.FetchColumnTypes (view)
@@ -552,9 +535,14 @@ class DBmanager:
             for col in row:
                 if colname[i] == 'id':
                     html += f'<td><a href="{self.action}?table={table}&row={col}">{col}</a></td>'
+                elif colname[i] == 'link':
+                    if re.search("^http", col) != None:
+                        html += f'<td><a href="{col}">{col}</a></td>' #f'<td>{col} ({mytype})</td>'
+                    else:
+                        html += f'<td>{col}</td>' #f'<td>{col} ({mytype})</td>'
                 else:
-                    #mytype = colTypes[colname[i]]
                     html += f'<td>{col}</td>' #f'<td>{col} ({mytype})</td>'
+                        
                 i = i+1
             html += '</tr>'
         
@@ -614,7 +602,6 @@ class DBmanager:
                 j=j+1
                         
             sql += ");"
-            #html += '<hr>**** INSERT PostTable ' + sql + ' All done!<br />'
 
         elif (button == 'SYNC'):
             sql = f"insert into {table} ("
@@ -637,7 +624,6 @@ class DBmanager:
                 j=j+1
                         
             sql += ");"
-            #html += '<hr>**** SYNC INSERT PostTable ' + sql + ' All done!<br />'
             
         elif (int(rowid) > 0) and (button == 'SAVE'):
             sql = f"update {table} set "
@@ -654,11 +640,10 @@ class DBmanager:
                 j=j+1
                         
             sql += f" where id = {rowid};"
-            #html += '<hr>**** UPDATE PostTable ' + sql + ' All done!<br />'
+
         elif (int(rowid) < 0) and (button == 'DELETE'):
             rowid = abs(rowid)
             sql = f"delete from {table} where id = {rowid};"
-            #html += '<hr>**** DELETE PostTable ' + sql + ' All done!<br />'
             
         cursor = self.cnx.cursor()
 
@@ -674,9 +659,10 @@ class DBmanager:
                 html += "Failed sql statement: {}".format(err) + ' <br />with ' +sql + "<hr>"
         
         cursor.close()
-        
+        REQUEST.update({"button": [button]})
+    
         html += '<hr>PostTable '+sql+' All done!<br />'
-        return html
+        return cursor.lastrowid
      
      
     #####################################################
@@ -692,7 +678,7 @@ class DBmanager:
         html = f'<form class="edittable" name="myform" action="{self.action}" method="post" enctype="multipart/form-data">'
         html += '<table id="Schlumpf">'
         for key, value in colTypes.items():
-            if key.lower() != 'id':
+            if key.lower() != 'id' and key != 'wpid':
                 if re.search('\_id$', key): # a lookup field
                     lookupName = re.sub(r'\_id$', '', key) # $lookupName = preg_replace("/_id$/", "", $key);
 
@@ -706,8 +692,6 @@ class DBmanager:
                     cursor.execute(f'select id, {lookup} from {lookup}_tb order by {lookup}')
                     for lurow in cursor:
                         selected = ''
-                        #foreach ($lurow as $lukey => $luvalue) # could be other columns we don't care about now...
-                        #for lukey, luvalue in lurow:
                         i=0
                         for lucol in lurow:
                             if i == 0:
@@ -724,7 +708,6 @@ class DBmanager:
                     html += "</td></tr>\n"
                     
                 elif (key in ['topic', 'desk']) :
-                #elif (key in ['topic', 'desk']) and (colValues is True) :
                     html += f"<tr><td>{key}</td><td>"
                     html += f'<SELECT NAME="{key}">'
 
@@ -732,9 +715,8 @@ class DBmanager:
                     cursor.execute(f'select distinct {key} from {table} order by {key}')
                     for drow in cursor:
                         selected = ''
-                        if colValues is True :
-                            if colValues[key] == drow[0]:
-                                selected = "selected"
+                        if colValues[key] == drow[0]:
+                            selected = "selected"
                             
                         html += f'<OPTION VALUE="{drow[0]}" {selected}>{drow[0]}'                   
                     html += "</td></tr>\n"
@@ -759,6 +741,11 @@ class DBmanager:
                         
                     html += "</td></tr>\n"    
             
+        if int(row) != -1:
+            mywp = colValues['wpid']
+        else:
+            mywp = -1
+        html +=  f'<tr><td><input type="hidden" name="wpid" value="{mywp}"/>'
         html +=  f'<tr><td><input type="hidden" name="rowid" value="{row}"/>'
         html +=  f'<input type="hidden" name="table" value="{table}"/>'
         if int(row) == -1:
@@ -784,26 +771,24 @@ class DBmanager:
             i=0
             mycol=0
             for column in list(map(lambda x: x[0], cursor.description)):
-                #print (column)
                 if column == 'sql':
                     mycol = i
                 i = i+1
 
             for row in cursor:
-                #print ("here is the row")
-                #pprint (row)
-                #cols[row[0]] = row[1]
                 sql = row[mycol]
+
+                sql = sql.replace("\n", "")
+                sql = sql.replace("\t", " ")
                 
                 matches = re.search(r'\((.+)\)', sql)
                 sqldef = matches.group(1)
-                #print ("sqldef "+sqldef)            
                 fields = re.split(r',', sqldef)
-                #pprint (fields)
                 
                 for field in fields:
                     matches = re.search(r'(\S+)\s+(\w+)', field)
                     name = matches.group(1)
+                    name = name.replace("\"", "")
                     attribute = matches.group(2)
                     cols[name] = attribute
                 
@@ -812,19 +797,6 @@ class DBmanager:
             for row in cursor:
                 cols[row[0]] = row[1]
              
-        #print ("FetchColumnTypes "+table)
-        #pprint (cols)
-
-        '''
-        here is the row
-        ('table',
-         'booking',
-         'booking',
-         7,
-         'CREATE TABLE booking (id  integer primary key AUTOINCREMENT,activity_id int '
-         'NOT NULL,person_id int NOT NULL,capacity_id int NOT NULL,authority_id int '
-         'NOT NULL,paid text NULL,attended text NULL)')
-         '''
         return cols
 
     #####################################################
@@ -843,11 +815,9 @@ class DBmanager:
             idd = id
         
         cursor.execute(f'select * from {table} where id = {idd}')
-        #print (f'select * from {table} where id = {idd}')
         colname=[]
         i=0
         for column in list(map(lambda x: x[0], cursor.description)):
-            #print (column)
             colname.insert(i, column)
             i = i+1
         
@@ -859,7 +829,6 @@ class DBmanager:
                 else:
                     cols[colname[i]] = col
                 i=i+1
-        # that would help if you return something - 6 Feb 2019
         return cols
 
 #####################################################
@@ -867,7 +836,6 @@ class DBmanager:
 # web server                                        #
 #                                                   #
 #####################################################
-#class S(RangeHTTPRequestHandler):
 class S(SimpleHTTPRequestHandler):
     def _set_response(self):
         self.send_response(200)
@@ -875,7 +843,6 @@ class S(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        """Serve a GET request."""
         global REQUEST
         print ('self.path is '+self.path)
         if (self.path != '/') and (not re.search(r'^\/\?', self.path)):
@@ -891,7 +858,6 @@ class S(SimpleHTTPRequestHandler):
             logging.info("GET request,\nPath: %s\nHeaders:\n%s\n", str(self.path), str(self.headers))
             self._set_response()
             (scheme, netloc, pathology, params, query, fragment) = urlparse (self.path)  # returns a tuple   
-            #ulp = parse_qs (query)
             REQUEST.clear()
             REQUEST = parse_qs (query)
             if len(query) == 0:
@@ -904,15 +870,6 @@ class S(SimpleHTTPRequestHandler):
 
     def list_directory(self, path): #disable it
         return None
-        '''logging.info("GET request,\nPath: %s\nHeaders:\n%s\n", str(self.path), str(self.headers))
-        self._set_response()
-        (scheme, netloc, path, params, query, fragment) = urlparse (self.path)  # returns a tuple   
-        ulp = parse_qs (query)
-        if len(query) == 0:
-            d = Dispatcher(path, '', ulp)
-        else:
-            d = Dispatcher(path, 'GET', ulp)
-        self.wfile.write(d.run())       '''
 
     def do_POST(self):
         global REQUEST
@@ -934,7 +891,6 @@ class S(SimpleHTTPRequestHandler):
         else:
             REQUEST = {}
             
-        pprint (REQUEST)
         path = ''
         d = Dispatcher()
         self._set_response()
@@ -946,7 +902,7 @@ class S(SimpleHTTPRequestHandler):
 #                                                   #
 #####################################################
 
-def run(server_class=HTTPServer, handler_class=S, port=8000):
+def run(server_class=HTTPServer, handler_class=S, port=3000):
     logging.basicConfig(level=logging.INFO)
     server_address = ('', port)
     httpd = server_class(server_address, handler_class)
